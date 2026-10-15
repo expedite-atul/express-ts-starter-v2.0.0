@@ -1,0 +1,35 @@
+{
+  // tsconfig.json allows comments. Each group says why the options are set.
+  "compilerOptions": {
+    /* Runtime: Node.js 22+ running native ES modules ("type": "module" in package.json) */
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    /* Imports: write the file you can see, e.g. `import { env } from './config/env.ts'`.
+       tsx runs .ts directly in development, and `tsc` rewrites the import to `.js` in dist/. */
+    "rewriteRelativeImportExtensions": true,
+    // Type-only imports must say so (`import type { Request } from 'express'`), so the
+    // emitted JavaScript never imports something that only exists at compile time.
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+
+    /* Output of `npm run build` */
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true,
+
+    /* Type safety: strict on purpose. Most security bugs start as "this can't be undefined". */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
