@@ -5,7 +5,9 @@
  * the app refuses to start and prints which variables are wrong (never their values,
  * because some of them are secrets).
  *
- * Everywhere else:  import { env } from '../config/env.ts';
+ * Who imports `env`: only entry points — src/server.ts, the TypeORM CLI data source,
+ * seeds and scripts. Everything else (services, middlewares, ...) receives the values
+ * it needs as constructor or function arguments, so tests can pass their own.
  * ESLint blocks `process.env` outside this file (see eslint.config.js).
  */
 import dotenv from 'dotenv';
@@ -70,31 +72,53 @@ const originList = () =>
 // The schema: one line per variable. Add new variables here AND in .env.example.
 // ---------------------------------------------------------------------------
 
-const envSchema = z.object({
-  NODE_ENV: requiredString().pipe(
-    z.enum(['development', 'test', 'production'], {
-      error: 'must be one of: development, test, production',
-    }),
-  ),
-  PORT: integer(1, 65_535),
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
-  DATABASE_URL: requiredString().pipe(
-    z.url({
-      protocol: /^postgres(ql)?$/,
-      error: 'must be a postgresql:// connection URL',
-    }),
-  ),
+const envSchema = z
+  .object({
+    NODE_ENV: requiredString().pipe(
+      z.enum(['development', 'test', 'production'], {
+        error: 'must be one of: development, test, production',
+      }),
+    ),
+    PORT: integer(0, 65_535), // 0 = any free port (used by tests)
+    LOG_LEVEL: requiredString().pipe(
+      z.enum(LOG_LEVELS, { error: `must be one of: ${LOG_LEVELS.join(', ')}` }),
+    ),
+    // How many reverse proxies sit in front of the app (0 = none). Needed so rate limiting
+    // sees the real client IP instead of the proxy's, without trusting spoofed headers.
+    TRUST_PROXY_HOPS: integer(0, 10),
 
-  JWT_ACCESS_SECRET: secret(),
-  JWT_ACCESS_TTL: shortDuration(),
-  JWT_ISSUER: requiredString(),
-  JWT_AUDIENCE: requiredString(),
-  REFRESH_TOKEN_TTL_DAYS: integer(1, 90),
+    DATABASE_URL: requiredString().pipe(
+      z.url({
+        protocol: /^postgres(ql)?$/,
+        error: 'must be a postgresql:// connection URL',
+      }),
+    ),
+    DATABASE_POOL_SIZE: integer(1, 100),
 
-  CORS_ORIGINS: originList(),
-  RATE_LIMIT_WINDOW_MS: integer(1_000, 86_400_000),
-  RATE_LIMIT_MAX_REQUESTS: integer(1, 10_000),
-});
+    JWT_ACCESS_SECRET: secret(),
+    JWT_ACCESS_TTL: shortDuration(),
+    JWT_ISSUER: requiredString(),
+    JWT_AUDIENCE: requiredString(),
+    REFRESH_TOKEN_TTL_DAYS: integer(1, 90),
+
+    CORS_ORIGINS: originList(),
+    RATE_LIMIT_WINDOW_MS: integer(1_000, 86_400_000),
+    RATE_LIMIT_MAX_REQUESTS: integer(1, 100_000),
+    AUTH_RATE_LIMIT_WINDOW_MS: integer(1_000, 86_400_000),
+    AUTH_RATE_LIMIT_MAX_REQUESTS: integer(1, 10_000),
+
+    AUDIT_LOG_RETENTION_DAYS: integer(1, 3_650),
+    INACTIVE_EMPLOYEE_RETENTION_DAYS: integer(1, 3_650),
+  })
+  // Rules that involve more than one variable run after every variable is valid.
+  .refine(
+    (config) =>
+      config.NODE_ENV !== 'production' ||
+      config.CORS_ORIGINS.every((origin) => origin.startsWith('https://')),
+    { path: ['CORS_ORIGINS'], error: 'must use https:// origins when NODE_ENV is production' },
+  );
 
 /** The validated, typed configuration. `PORT` is a number, `CORS_ORIGINS` a string[], and so on. */
 export type Env = Readonly<z.infer<typeof envSchema>>;

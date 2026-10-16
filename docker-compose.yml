@@ -1,0 +1,26 @@
+# Local PostgreSQL for development and tests.
+#
+#   docker compose up -d        start (data survives restarts in the "pgdata" volume)
+#   docker compose down -v      stop and DELETE all data
+#
+# The credentials below are for this local container only. Never reuse them anywhere else.
+# The test suite creates its own database (employee_management_test) on this server.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: employee_management
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d employee_management']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+{
+  // `npm run build`: compile the application, migrations, seeds and scripts into dist/.
+  // Tests are type-checked by tsconfig.json but never shipped.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "dist",
+    "sourceMap": true
+  },
+  "include": ["src", "migrations", "seeds", "scripts"]
+}

@@ -6,20 +6,26 @@ import tseslint from 'typescript-eslint';
 /**
  * Architecture rules (see docs/hld.md, "Layered architecture").
  *
- *   Route → Middleware → Controller → Service → Repository → PostgreSQL
+ *   Route → Middleware → Controller → Service → Repository → PostgreSQL (via TypeORM)
  *
- * A layer may depend on the layers below it, never above it, and only the
- * repository layer talks to the database. These rules turn a shortcut such as
- * "the controller queries the table directly" into a lint error.
+ * A layer may depend on the layers below it, never above it. Only repositories (and the
+ * DataSource in src/config) use TypeORM. Services, middlewares and controllers never read
+ * configuration themselves: they receive it as arguments from the composition root.
+ * These rules turn a shortcut such as "the controller queries the table directly" into
+ * a lint error.
  */
 const forbidden = {
   express: {
     regex: '^express$',
     message: 'HTTP stays in routes, middlewares and controllers. Pass plain values into this layer.',
   },
-  pg: {
-    regex: '^pg$',
-    message: 'Only repositories (and src/config/database.ts) talk to PostgreSQL.',
+  database: {
+    regex: '^(pg|typeorm)$',
+    message: 'Only repositories (and src/config/database.ts) talk to the database.',
+  },
+  entities: {
+    regex: '/entities/',
+    message: 'Entities are the persistence model: only repositories use them. Use src/domain types.',
   },
   repositories: {
     regex: '/repositories/',
@@ -43,19 +49,22 @@ const forbidden = {
   },
   config: {
     regex: '/config/',
-    message: 'Domain objects are pure. Pass configuration in as arguments.',
+    message: 'Receive configuration as a constructor/function argument (see src/container.ts).',
   },
 };
 
 /** @type {Record<string, (keyof typeof forbidden)[]>} */
 const layerRules = {
-  'src/routes/**': ['pg', 'repositories'],
-  'src/middlewares/**': ['pg', 'repositories', 'controllers', 'routes'],
-  'src/controllers/**': ['pg', 'repositories', 'routes'],
-  'src/services/**': ['express', 'pg', 'controllers', 'routes', 'middlewares'],
-  'src/repositories/**': ['express', 'services', 'controllers', 'routes', 'middlewares'],
+  'src/routes/**': ['database', 'entities', 'repositories', 'config'],
+  'src/middlewares/**': ['database', 'entities', 'repositories', 'controllers', 'routes', 'config'],
+  'src/controllers/**': ['database', 'entities', 'repositories', 'routes', 'config'],
+  'src/services/**': ['express', 'database', 'entities', 'controllers', 'routes', 'middlewares', 'config'],
+  'src/repositories/**': ['express', 'services', 'controllers', 'routes', 'middlewares', 'config'],
+  'src/dto/**': ['express', 'database', 'entities', 'repositories', 'services', 'controllers', 'routes', 'middlewares', 'config'],
+  'src/validators/**': ['express', 'database', 'entities', 'repositories', 'services', 'controllers', 'routes', 'middlewares', 'config'],
+  'src/entities/**': ['express', 'repositories', 'services', 'controllers', 'routes', 'middlewares', 'config'],
   'src/domain/**': [
-    'express', 'pg', 'repositories', 'services', 'controllers', 'routes', 'middlewares', 'config',
+    'express', 'database', 'entities', 'repositories', 'services', 'controllers', 'routes', 'middlewares', 'config',
   ],
 };
 
@@ -92,8 +101,22 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/config/env.ts'],
+    // The config module, plus test tooling that must choose a test database before the
+    // app's configuration exists.
+    files: ['src/config/env.ts', 'tests/**', 'vitest.config.ts'],
     rules: { 'no-restricted-properties': 'off' },
+  },
+
+  {
+    // Tests read untyped JSON from HTTP responses (`response.body` is `any`). Application
+    // code keeps these rules: there, untyped data must be validated first.
+    files: ['tests/**'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+    },
   },
 
   ...Object.entries(layerRules).map(([files, banned]) => ({

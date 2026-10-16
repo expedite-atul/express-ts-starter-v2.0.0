@@ -1,5 +1,7 @@
 {
-  // tsconfig.json allows comments. Each group says why the options are set.
+  // Used by the editor, `npm run typecheck`, ESLint and the test runner. It checks every
+  // TypeScript file in the project, tests included, and emits nothing.
+  // `npm run build` uses tsconfig.build.json, which extends this file.
   "compilerOptions": {
     /* Runtime: Node.js 22+ running native ES modules ("type": "module" in package.json) */
     "target": "ES2023",
@@ -17,10 +19,13 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
 
-    /* Output of `npm run build` */
-    "rootDir": "src",
-    "outDir": "dist",
-    "sourceMap": true,
+    /* TypeORM entities use decorators (@Entity, @Column, ...).
+       Every @Column states its database type explicitly, so `emitDecoratorMetadata`
+       is not needed (and tsx/esbuild could not emit it anyway). */
+    "experimentalDecorators": true,
+    // Class fields keep TypeScript's classic semantics: a declared-but-unassigned entity
+    // property does not become an own `undefined` property that hides ORM-managed values.
+    "useDefineForClassFields": false,
 
     /* Type safety: strict on purpose. Most security bugs start as "this can't be undefined". */
     "strict": true,
@@ -29,7 +34,9 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "migrations", "seeds", "scripts", "tests", "vitest.config.ts"]
 }
